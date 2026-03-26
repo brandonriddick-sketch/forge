@@ -395,7 +395,7 @@ function getWeightLogHTML(dayKey, ex, exIdx) {
   return '<div class="weight-log-label">⚖️ Log Weights</div>' +
     '<div class="weight-inputs">' + setInputs +
     '<button class="weight-save-btn" id="wsave_'+dayKey+'_'+exIdx+'" ' +
-    'data-day="'+dayKey+'" data-ex="'+exIdx+'" data-sets="'+ex.sets+'" data-name="'+ex.name.replace(/"/g,"&quot;")+"'" +
+    'data-day="'+dayKey+'" data-ex="'+exIdx+'" data-sets="'+ex.sets+'" data-name="'+ex.name.replace(/"/g,'&quot;')+'" ' +
     'onclick="saveWeightLog(this)">Save</button>' +
     '</div>' + prevRow;
 }
