@@ -186,6 +186,27 @@ body{background:#0a0a0a;color:#f0ece4;font-family:-apple-system,BlinkMacSystemFo
 .prev-weight-date{font-size:9px;color:#3a3a3a;font-family:"Courier New",monospace;margin-left:auto}
 .target-weight{font-size:9px;color:#4caf78;font-family:"Courier New",monospace;margin-left:4px}
 
+
+/* Weight entry on ME tab */
+.weigh-in-wrap{background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;padding:16px;margin:12px 0}
+.weigh-in-title{font-size:10px;font-family:"Courier New",monospace;letter-spacing:3px;color:#5a5550;text-transform:uppercase;margin-bottom:10px}
+.weigh-in-row{display:flex;align-items:center;gap:10px}
+.weigh-in-input{flex:1;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#f0ece4;font-size:22px;font-family:"Courier New",monospace;padding:10px 14px;text-align:center;-webkit-appearance:none;max-width:120px}
+.weigh-in-input:focus{outline:none;border-color:#ff4d1c}
+.weigh-in-unit{color:#5a5550;font-family:"Courier New",monospace;font-size:14px}
+.weigh-in-btn{padding:10px 18px;border-radius:8px;border:1px solid rgba(255,77,28,.5);background:rgba(255,77,28,.15);color:#ff4d1c;font-size:13px;font-weight:700;cursor:pointer;font-family:-apple-system,sans-serif}
+.weigh-in-btn.saved{border-color:rgba(76,207,120,.5);background:rgba(76,207,120,.15);color:#4caf78}
+.weigh-in-history{margin-top:12px}
+.weigh-in-hist-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a}
+.weigh-in-hist-date{font-size:10px;color:#5a5550;font-family:"Courier New",monospace}
+.weigh-in-hist-val{font-size:11px;color:#ff8c42;font-family:"Courier New",monospace;font-weight:600}
+.weigh-in-hist-delta{font-size:10px;font-family:"Courier New",monospace}
+.weigh-in-hist-delta.down{color:#4caf78}
+.weigh-in-hist-delta.up{color:#ff4d1c}
+.current-weight-display{font-size:42px;font-family:"Courier New",monospace;color:#ff4d1c;font-weight:700;text-align:center;margin:8px 0}
+.weight-goal-bar{margin-top:8px}
+.weight-goal-text{display:flex;justify-content:space-between;font-size:9px;color:#5a5550;font-family:"Courier New",monospace;margin-bottom:4px}
+
 </style>
 </head>
 <body>
@@ -280,6 +301,105 @@ const TC={machine:"#4c9af5",free:"#ff8c42",bodyweight:"#4caf78",cardio:"#f5c842"
 const TL={machine:"Machine",free:"Free Weights",bodyweight:"Bodyweight",cardio:"Cardio"};
 
 // ─── EXERCISE GUIDE DATA ──────────────────────────────────────────────────────
+
+
+// ── WEIGHT LOG ──────────────────────────────────────────────────────────────
+const WEIGHT_LOG_KEY = "forge_weightlog_v1";
+const START_WEIGHT = 260;
+const TARGET_WEIGHT = 236;
+
+function loadWeightLog() {
+  try { return JSON.parse(localStorage.getItem(WEIGHT_LOG_KEY) || "[]"); } catch { return []; }
+}
+function saveWeightLog_local(log) {
+  try { localStorage.setItem(WEIGHT_LOG_KEY, JSON.stringify(log)); } catch {}
+}
+function getCurrentWeight() {
+  var log = loadWeightLog();
+  return log.length > 0 ? parseFloat(log[log.length-1].weight) : 246;
+}
+
+async function saveWeighIn() {
+  var input = document.getElementById("weigh-in-input");
+  var btn = document.getElementById("weigh-in-btn");
+  if(!input || !input.value) return;
+  var weight = parseFloat(input.value);
+  if(weight < 100 || weight > 500) return;
+  
+  btn.textContent = "Saving...";
+  btn.disabled = true;
+
+  var log = loadWeightLog();
+  var today = new Date().toISOString().slice(0,10);
+  var existing = log.findIndex(function(e){ return e.date === today; });
+  var entry = {date: today, weight: weight};
+  if(existing >= 0) log[existing] = entry;
+  else log.push(entry);
+  if(log.length > 90) log = log.slice(-90);
+  saveWeightLog_local(log);
+
+  // Save to Google Sheet
+  try {
+    await fetch(SHEETS_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        date: today,
+        day: "WEIGHT",
+        exercise: "Morning Weigh-In",
+        sets: [weight, "", "", "", ""]
+      })
+    });
+    btn.textContent = "✓ Saved";
+  } catch {
+    btn.textContent = "✓ Saved";
+  }
+  
+  btn.className = "weigh-in-btn saved";
+  btn.disabled = false;
+  setTimeout(function(){ renderStats(); }, 1000);
+}
+
+function getWeighInHTML() {
+  var log = loadWeightLog();
+  var current = log.length > 0 ? parseFloat(log[log.length-1].weight) : 246;
+  var lost = START_WEIGHT - current;
+  var toGo = current - TARGET_WEIGHT;
+  var progress = Math.min(100, Math.round((START_WEIGHT - current) / (START_WEIGHT - TARGET_WEIGHT) * 100));
+
+  // Last 5 entries for history
+  var histHTML = "";
+  var recent = log.slice(-5).reverse();
+  for(var i=0; i<recent.length; i++) {
+    var prev = i < recent.length-1 ? parseFloat(recent[i+1].weight) : null;
+    var delta = prev ? (parseFloat(recent[i].weight) - prev) : null;
+    var deltaStr = delta !== null ? (delta > 0 ? "+"+delta.toFixed(1) : delta.toFixed(1)) : "";
+    var deltaClass = delta !== null ? (delta <= 0 ? "down" : "up") : "";
+    histHTML += '<div class="weigh-in-hist-row">' +
+      '<div class="weigh-in-hist-date">'+recent[i].date+'</div>' +
+      '<div class="weigh-in-hist-val">'+recent[i].weight+' lb</div>' +
+      '<div class="weigh-in-hist-delta '+deltaClass+'">'+deltaStr+'</div>' +
+    '</div>';
+  }
+
+  return '<div class="weigh-in-wrap">' +
+    '<div class="weigh-in-title">⚖️ Morning Weigh-In</div>' +
+    '<div class="current-weight-display">'+current+' lb</div>' +
+    '<div class="weight-goal-bar">' +
+      '<div class="weight-goal-text"><span>260 lb start</span><span>'+lost+' lb lost</span><span>236 lb goal</span></div>' +
+      '<div class="progress-bar-wrap"><div class="progress-bar" style="width:'+progress+'%;background:linear-gradient(90deg,#4caf78,#ff4d1c)"></div></div>' +
+      '<div class="weight-goal-text" style="margin-top:4px"><span></span><span style="color:#ff8c42">'+toGo+' lb to go</span><span></span></div>' +
+    '</div>' +
+    '<div class="weigh-in-row" style="margin-top:12px">' +
+      '<input class="weigh-in-input" id="weigh-in-input" type="number" placeholder="'+current+'" min="150" max="400" step="0.1">' +
+      '<div class="weigh-in-unit">lb</div>' +
+      '<button class="weigh-in-btn" id="weigh-in-btn" onclick="saveWeighIn()">Log Weight</button>' +
+    '</div>' +
+    (histHTML ? '<div class="weigh-in-history">'+histHTML+'</div>' : '') +
+  '</div>';
+}
+
 
 // ── WEIGHT LOGGING ─────────────────────────────────────────────────────────────
 const WK_LOG_KEY = "forge_weights_v1";
@@ -2790,14 +2910,17 @@ function renderCard(dayKey,ex,idx){
 function renderStats(){
   var today = new Date();
   var phase1Start = new Date('2026-02-10');
+  var phase1End = new Date('2026-04-03');
+  var totalDays = Math.floor((phase1End - phase1Start)/(1000*60*60*24))+1;
   var dayNum = Math.floor((today - phase1Start)/(1000*60*60*24))+1;
-  var daysLeft = 60 - dayNum;
-  var pct = Math.min(100,Math.round(dayNum/60*100));
+  var daysLeft = Math.max(0, Math.floor((phase1End - today)/(1000*60*60*24)));
+  var pct = Math.min(100,Math.round(dayNum/totalDays*100));
   // Official stats as of 3/24/26 clinical visit
   var startWeight = 260;
   var currentWeight = 246;
   var targetWeight = 236;
-  var lostSoFar = startWeight - currentWeight;
+  var dynamicWeight = getCurrentWeight();
+  var lostSoFar = startWeight - dynamicWeight;
   var totalGoal = startWeight - targetWeight;
   var lostPct = Math.round(lostSoFar/totalGoal*100);
   var todayDow = today.getDay();
@@ -2819,19 +2942,19 @@ function renderStats(){
     '<div class="stat-grid">' +
     '<div class="stat-card highlight">' +
     '<div class="stat-val">Day '+dayNum+'</div>' +
-    '<div class="stat-label">of 60-day challenge</div>' +
+    '<div class="stat-label">of '+totalDays+'-day challenge (Day '+dayNum+')</div>' +
     '<div class="progress-bar-wrap"><div class="progress-bar" style="width:'+pct+'%;background:linear-gradient(90deg,#ff4d1c,#ff8c42)"></div></div>' +
     '<div class="stat-sub">'+daysLeft+' days remaining</div>' +
     '</div>' +
     '<div class="stat-card green">' +
     '<div class="stat-val">'+lostSoFar+' lb</div>' +
     '<div class="stat-label">lost so far</div>' +
-    '<div class="stat-sub">260 → '+currentWeight+' lb</div>' +
+    '<div class="stat-sub">260 → '+dynamicWeight+' lb</div>' +
     '<div class="progress-bar-wrap"><div class="progress-bar" style="width:'+lostPct+'%;background:linear-gradient(90deg,#4caf78,#4c9af5)"></div></div>' +
     '<div class="stat-sub">Goal: '+totalGoal+' lb total</div>' +
     '</div>' +
     '<div class="stat-card blue">' +
-    '<div class="stat-val">'+currentWeight+'</div>' +
+    '<div class="stat-val">'+getCurrentWeight()+'</div>' +
     '<div class="stat-label">current weight (lb)</div>' +
     '<div class="stat-sub">Target: 236 lb by Apr 3</div>' +
     '</div>' +
@@ -2841,6 +2964,8 @@ function renderStats(){
     '<div class="stat-sub">Target BMI: ~34.8 by Apr 3</div>' +
     '</div>' +
     '</div></div>' +
+
+    getWeighInHTML() +
 
     '<div class="stats-section">' +
     '<div class="stats-heading">Body Composition — 3/24/26</div>' +
