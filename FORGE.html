@@ -364,8 +364,8 @@ async function saveWeighIn() {
 function getWeighInHTML() {
   var log = loadWeightLog();
   var current = log.length > 0 ? parseFloat(log[log.length-1].weight) : 246;
-  var lost = START_WEIGHT - current;
-  var toGo = current - TARGET_WEIGHT;
+  var lost = parseFloat((START_WEIGHT - current).toFixed(1));
+  var toGo = parseFloat((current - TARGET_WEIGHT).toFixed(1));
   var progress = Math.min(100, Math.round((START_WEIGHT - current) / (START_WEIGHT - TARGET_WEIGHT) * 100));
 
   // Last 5 entries for history
@@ -2920,7 +2920,7 @@ function renderStats(){
   var currentWeight = 246;
   var targetWeight = 236;
   var dynamicWeight = getCurrentWeight();
-  var lostSoFar = startWeight - dynamicWeight;
+  var lostSoFar = parseFloat((startWeight - dynamicWeight).toFixed(1));
   var totalGoal = startWeight - targetWeight;
   var lostPct = Math.round(lostSoFar/totalGoal*100);
   var todayDow = today.getDay();
